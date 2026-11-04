@@ -5,38 +5,45 @@ const inventory = require('./inventory');
 const chats = new Map();
 
 function respuestaLocal(text) {
-  const t = text.toLowerCase();
-  const esFriolenta = t.includes('friolenta') || t.includes('frio') || t.includes('friolenta');
-  const esLluvia = t.includes('llover') || t.includes('lluvia') || t.includes('va a llover') || t.includes('llueva');
+  const t = text.toLowerCase().trim();
+  const esFriolenta = t.includes('friolenta') || t.includes('frio');
+  const esLluvia = t.includes('llover') || t.includes('lluvia');
   const esJaña = t.includes('jaña') || t.includes('novia') || t.includes('ella');
   const preguntaCafe = t.includes('que cafe') || t.includes('cual cafe') || t.includes('usan');
 
+  // 1. SALUDOS - PARA NO VERSE ROBOT
+  if (['oe', 'oee', 'oeh', 'hola', 'buenas', 'buena', 'hey', 'hello', 'que tal', 'k tal'].some(w => t === w || t.startsWith(w + ' '))) {
+    const hora = new Date().getHours();
+    let saludo = 'Buenas tardes';
+    if (hora < 12) saludo = 'Buenos días';
+    if (hora > 18) saludo = 'Buenas noches';
+    return `${saludo} rey! 😁 Soy Gracias de Gracias Café. ¿Cómo te ayudo hoy?`;
+  }
+
+  if (t.length <= 3) { // Mensajes cortos tipo "Oe" "Ya" "Ok"
+    return `Dime rey, te escucho 👂 ¿Qué te apetece hoy?`;
+  }
+
   if (preguntaCafe) {
-    return `Mirá rey, usamos Café Toro 100% de Matagalpa, de altura, lavado. Te lo recomiendo porque es intenso, afrutado y bien nica, no es café comercial aguado. Ese es el que usamos para todo ☕️🇳🇮`;
+    return `Mirá rey, usamos Café Toro 100% de Matagalpa, de altura. Te lo recomiendo porque es intenso y bien nica, no es café aguado ☕️ ¿Quieres probar uno?`;
   }
 
-  // CASO ESTRELLA: JAÑA FRIOLENTA + LLUVIA
   if (esJaña && esFriolenta && esLluvia) {
-    return `Mirá rey, te recomiendo el Café Caliente con Leche + Brownie. ¿Por qué? Porque si ella es friolenta y va a llover, el fresco le va a dar más frío y va a tiritar. En cambio el calientito con leche la apapacha, le calienta las manitas y el brownie la endulza. Ahí quedas como un rey detallista 👑☕️ ¿Te lo armo?`;
+    return `Mirá, para tu jaña friolenta con esta lluvia que viene, te recomiendo Café Caliente con Leche + Brownie. ¿Por qué? Porque el fresco le va a dar más frío y va a tiritar, en cambio el calientito la apapacha y la endulza. Ahí quedas como un rey detallista 👑 ¿Te lo armo?`;
   }
 
-  if (esFriolenta && esLluvia) {
-    return `Te recomiendo Café Caliente con Leche o Capuccino rey. ¿Por qué? Porque con lluvia y frío, el cuerpo pide calor. El helado o fresco te va a enfriar más. El caliente te levanta y te mantiene activo. ¿Cuál te llevo?`;
-  }
-
-  if (t.includes('cafe o fresco') || t.includes('cafe o un fresco')) {
+  if (t.includes('cafe o fresco')) {
     if (esFriolenta || esLluvia) {
-      return `Café de una rey. Te explico: si es friolenta y va a llover, el fresco es mala idea porque le da más frío. El café caliente la cuida. Llevate Latte Caliente, es suave y la va a calentar rico.`;
-    } else {
-      return `Si hace calor, andate por el Café Helado con Mocha rey. Te lo recomiendo porque refresca, es dulce y pega rico con el calorón 🧊`;
+      return `Café de una rey. Si es friolenta y va a llover, el fresco es mala idea. Llevate el Latte Caliente, la va a calentar rico.`;
     }
   }
 
-  if (t.includes('que valen') || t.includes('precio') || t.includes('menu') || t.includes('que tenes')) {
-    return `Dale pues, esto tenemos hoy:\n${inventory.getMenuTexto()}\n\nDecime qué se te antoja y te digo por qué te conviene.`;
+  if (t.includes('que valen') || t.includes('precio') || t.includes('que tenes') || t.includes('menu')) {
+    return `Esto tenemos hoy rey:\n${inventory.getMenuTexto()}\n¿Cual te va?`;
   }
 
-  return `Dale rey, tenemos:\n${inventory.getMenuTexto()}\nDecime para quién es y dónde va a estar y te recomiendo el ideal con su por qué.`;
+  // Fallback general ya no tira menú de golpe, pregunta primero
+  return `Cuéntame rey, ¿es para vos o para tu jaña? ¿Quiere algo calientito o fresquito? Así te recomiendo el ideal.`;
 }
 
 async function getReply(userText, from = 'cliente') {
@@ -50,14 +57,14 @@ async function getReply(userText, from = 'cliente') {
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'system', content: buildPrompt() }, ...history],
       max_tokens: 400,
-      temperature: 0.7,
+      temperature: 0.8,
     }, { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` }, timeout: 8000 });
 
     let reply = res.data.choices[0].message.content.trim();
     history.push({ role: 'assistant', content: reply });
     return reply;
   } catch (e) {
-    console.log('Groq fail, usando cerebro local');
+    console.log('Groq fail');
     return respuestaLocal(userText);
   }
 }
