@@ -4,6 +4,8 @@ const { getReply } = require('./groq');
 const { saveOrder } = require('./sheets');
 const { createEvent } = require('./calendar');
 const { routeMessage } = require('./menu');
+const { transcribeAudio } = require('./audio');
+
 const app = express();
 app.use(express.json());
 
@@ -24,7 +26,27 @@ app.post('/webhook', async (req, res) => {
     if (!msg) return res.sendStatus(200);
 
     const from = msg.from;
-    const text = msg.text?.body || '';
+    let text = msg.text?.body || '';
+
+    // --- NUEVO: SOPORTE PARA AUDIOS ---
+    if (msg.type === 'audio' || msg.type === 'voice') {
+      console.log('Cliente mandó audio');
+      const audioId = msg.audio?.id || msg.voice?.id;
+      const trans = await transcribeAudio(audioId);
+      text = trans || '';
+      if (!text) {
+        // Si no pudo transcribir, responde igual para no caer
+        await axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
+          { messaging_product: 'whatsapp', to: from, text: { body: '🎙️ No te escuché bien rey, ¿me lo escribís porfa?' } },
+          { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
+        );
+        return res.sendStatus(200);
+      }
+      console.log('Audio transcrito:', text);
+    }
+    // --- FIN AUDIO ---
+
+    if (!text) return res.sendStatus(200);
     console.log('Cliente:', text);
 
     const action = routeMessage(text);
@@ -38,6 +60,11 @@ app.post('/webhook', async (req, res) => {
       if (action.type === 'order') {
         await saveOrder({ cliente: from, pedido: text });
       }
+    }
+
+    // --- FIX PARA EL ERROR text.body ---
+    if (!reply || reply.trim() === '') {
+      reply = 'Soy Gracias de Gracias Café ☕️ ¿qué te antoja hoy?';
     }
 
     await axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
