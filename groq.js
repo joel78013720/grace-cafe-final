@@ -1,44 +1,34 @@
 const axios = require('axios');
 const { buildPrompt } = require('./prompt');
+const inventory = require('./inventory');
 
-async function getReply(userMsg) {
-  const msg = (userMsg || '').toLowerCase();
-  let aiText = '';
+// Memoria simple para no olvidar contexto
+const chats = new Map();
+
+async function getReply(userText, from = 'cliente') {
+  const SYSTEM = buildPrompt();
+  
+  if (!chats.has(from)) chats.set(from, []);
+  const history = chats.get(from);
+  history.push({ role: 'user', content: userText });
+  if (history.length > 6) history.shift(); // guarda ultimos 6
+
+  const messages = [{ role: 'system', content: SYSTEM }, ...history];
+
   try {
-    const r = await axios.post('https://api.groq.com/openai/v1/chat/completions',{
-      model:'openai/gpt-oss-20b',
-      messages:[
-        {role:'system', content: buildPrompt()},
-        {role:'user', content: userMsg}
-      ],
-      temperature:0.7,
-      max_tokens:200
-    },{
-      headers:{
-        Authorization:`Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type':'application/json'
-      }
-    });
-    aiText = r.data?.choices?.[0]?.message?.content || '';
-  } catch(e){
+    const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      max_tokens: 350,
+      temperature: 0.8,
+    }, { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` } });
+
+    let reply = res.data.choices[0].message.content.trim();
+    history.push({ role: 'assistant', content: reply });
+    return reply;
+  } catch (e) {
     console.log('Groq fail', e.response?.data || e.message);
+    return `Uy rey, se me lagueó un toque 😅 Pero mirá lo que tenemos hoy:\n${inventory.getMenuTexto()}\n¿Cuál te va?`;
   }
-
-  // Si la IA no devolvió nada, usamos respaldo que SIEMPRE tiene texto
-  if (!aiText || aiText.trim() === '') {
-    if(msg.includes('pastel') || msg.includes('torta') || msg.includes('postre') || msg.includes('brownie')) {
-      return '¡Sí! 🍰 Tenemos brownies C$90, torta de chocolate y cheesecake C$120. ¿Cuál te antoja?';
-    }
-    if(msg.includes('fresq') || msg.includes('jugo')) {
-      return '¡De una! 🧃 Tengo fresquito de cacao, jamaica y tamarindo. ¿Cuál querés?';
-    }
-    if(msg.includes('cafe') || msg.includes('café')) {
-      return 'Dale rey, un cafecito ☕️ ¿lo querés helado o caliente? ¿Cuántos?';
-    }
-    return 'Soy Gracias de Gracias Café ☕️ ¿qué te antoja hoy?';
-  }
-
-  return aiText.slice(0,300);
 }
-
-module.exports={getReply};
+module.exports = { getReply };
