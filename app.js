@@ -5,10 +5,6 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
-// Fix para menu para que no de error nunca
-const menuModule = require('./menu');
-const getMenuText = menuModule.getMenuText || menuModule.getMenu || menuModule.default || (() => "¡Hola! En Gracias Café tenemos Espresso, Latte, Cappuccino, Frappés y postres deliciosos 🍰 ¿Qué te gustaría pedir?");
-
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -34,22 +30,22 @@ app.post('/webhook', async (req, res) => {
 
     const from = message.from;
     const rawText = message.text?.body || "";
-    const text = rawText.toLowerCase();
-
     console.log(`De ${from}: ${rawText}`);
 
     let respuesta;
-    if (text.includes("disponib") || text.includes("menu") || text.includes("carta")) {
-      respuesta = getMenuText();
-    } else if (from === process.env.OWNER_NUMBER) {
+    if (from === process.env.OWNER_NUMBER) {
       const { getOwnerPrompt } = require('./owner');
-      respuesta = await getReply(getOwnerPrompt(rawText)) || "Dime Rey, ¿qué hacemos?";
+      respuesta = await getReply(getOwnerPrompt(rawText));
     } else {
       const { getVendedoraPrompt } = require('./vendedora');
-      respuesta = await getReply(getVendedoraPrompt(rawText)) || getMenuText();
+      respuesta = await getReply(getVendedoraPrompt(rawText));
     }
 
-    if (respuesta) await enviarWhatsApp(from, respuesta);
+    if (!respuesta) {
+      respuesta = "Hola Rey! Soy de Gracias Café ☕️ ¿En qué te ayudo hoy?";
+    }
+
+    await enviarWhatsApp(from, respuesta);
   } catch (e) {
     console.log("Webhook error:", e.message);
   }
@@ -66,7 +62,7 @@ async function enviarWhatsApp(to, body) {
   }
 }
 
-app.get('/', (req, res) => res.send('Gracias Cafe Live con Groq'));
+app.get('/', (req, res) => res.send('Gracias Cafe Live con Groq - SOLO IA'));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, ()
+app.listen(PORT, () => console.log(`Server en ${PORT} con Groq SOLO IA`));
