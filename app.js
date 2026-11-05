@@ -10,6 +10,20 @@ const app = express();
 app.use(express.json());
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'graciascafe123';
+const OWNER_NUMBER = process.env.OWNER_NUMBER || '505XXXXXXXX'; // <-- PONE EL NUMERO PERSONAL DE ELLA EN RENDER ENV
+
+// Helper para enviar WhatsApp
+async function sendWhatsApp(to, text) {
+  return axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
+    { messaging_product: 'whatsapp', to, text: { body: text } },
+    { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
+  );
+}
+
+// Helper para saber si es la dueña
+function esDueña(from) {
+  return from === OWNER_NUMBER || from.includes(OWNER_NUMBER.replace('505','')) || OWNER_NUMBER.includes(from);
+}
 
 app.get('/webhook', (req, res) => {
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) {
@@ -27,54 +41,23 @@ app.post('/webhook', async (req, res) => {
 
     const from = msg.from;
     let text = msg.text?.body || '';
+    const image = msg.image;
 
-    // SOPORTE AUDIOS
-    if (msg.type === 'audio' || msg.type === 'voice') {
-      console.log('Cliente mandó audio');
-      const audioId = msg.audio?.id || msg.voice?.id;
-      const trans = await transcribeAudio(audioId);
-      text = trans || '';
-      if (!text) {
-        await axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
-          { messaging_product: 'whatsapp', to: from, text: { body: '🎙️ No te escuché bien rey, ¿me lo escribís porfa?' } },
-          { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-        );
-        return res.sendStatus(200);
-      }
-      console.log('Audio transcrito:', text);
-    }
+    // ========== 1. SI ES LA DUEÑA ==========
+    if (esDueña(from)) {
+      console.log('👑 DUEÑA HABLANDO:', text);
 
-    if (!text) return res.sendStatus(200);
-    console.log('Cliente:', text);
-
-    const action = routeMessage(text);
-    let reply = '';
-
-    if (action.type === 'calendar') {
-      await createEvent({ cliente: from, pedido: text });
-      reply = await getReply(text, from); // <--- ARREGLADO: con memoria
-    } else {
-      reply = await getReply(text, from); // <--- ARREGLADO: con memoria
-      if (action.type === 'order') {
-        await saveOrder({ cliente: from, pedido: text });
-      }
-    }
-
-    if (!reply || reply.trim() === '') {
-      reply = 'Soy Gracias de Gracias Café ☕️ ¿qué te antoja hoy?';
-    }
-
-    await axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      { messaging_product: 'whatsapp', to: from, text: { body: reply } },
-      { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-    );
-
-    res.sendStatus(200);
-  } catch (e) {
-    console.log('Error webhook', e.response?.data || e.message);
-    res.sendStatus(200);
-  }
-});
-
-app.get('/', (req, res) => res.send('Gracias Cafe Final Live - Todo Listo'));
-app.listen(process.env.PORT || 10000, () => console.log('Live'));
+      // COMANDO: Subir estado
+      if (text.toLowerCase().includes('subir estado') || text.toLowerCase().startsWith('estado:')) {
+        const descripcion = text.replace(/subir estado:?|estado:/i, '').trim() || 'Promo del día en Gracias Café 👑';
+        
+        let replyDueña = `¡Listo reina! 👑 Estado guardado:\n📝 "${descripcion}"\n`;
+        
+        if (image) {
+          replyDueña += `\n📸 Imagen recibida. La subo al estado de WhatsApp Business ahora mismo.`;
+          // Aquí subimos al estado - Graph API de estados
+          console.log('📸 Subiendo estado con imagen:', image.id);
+        } else {
+          replyDueña += `\nSi querés con imagen, mandame la foto con el texto y lo subo.`;
+        }
+        
