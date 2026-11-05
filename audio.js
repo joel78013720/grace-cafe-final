@@ -1,25 +1,13 @@
 const axios = require('axios');
-const FormData = require('form-data');
-
 async function transcribeAudio(audioId) {
   try {
-    const mediaRes = await axios.get(`https://graph.facebook.com/v20.0/${audioId}`, {
-      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
+    const r1 = await axios.get(`https://graph.facebook.com/v20.0/${audioId}`, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } });
+    const audioBuffer = await axios.get(r1.data.url, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }, responseType: 'arraybuffer' });
+    const base64 = Buffer.from(audioBuffer.data).toString('base64');
+    const g = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      contents: [{ parts: [{ text: "Transcribí este audio en español, solo la transcripción." }, { inline_data: { mime_type: "audio/ogg", data: base64 } }] }]
     });
-    const audioFile = await axios.get(mediaRes.data.url, {
-      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
-      responseType: 'arraybuffer'
-    });
-    const form = new FormData();
-    form.append('file', audioFile.data, { filename: 'audio.ogg', contentType: 'audio/ogg' });
-    form.append('model', 'whisper-large-v3');
-    const transRes = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', form, {
-      headers: { ...form.getHeaders(), Authorization: `Bearer ${process.env.GROQ_API_KEY}` }
-    });
-    return transRes.data.text;
-  } catch(e) {
-    console.log('Audio fail', e.response?.data || e.message);
-    return null;
-  }
+    return g.data.candidates[0].content.parts[0].text;
+  } catch(e) { console.log('AUDIO ERR', e.message); return ''; }
 }
 module.exports = { transcribeAudio };
