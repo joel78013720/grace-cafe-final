@@ -46,39 +46,4 @@ app.post('/webhook', async (req, res) => {
     if (!memoria.has(from)) memoria.set(from, []);
     const historial = memoria.get(from);
     historial.push({ role: "user", content: rawText + (esFoto ? " [FOTO]" : "") });
-    if (historial.length > 14) historial.shift();
-    ultimaInteraccion.set(from, Date.now());
-
-    let respuesta;
-
-    // === CASO 1: DUEÑA ===
-    if (from === OWNER_NUMBER) {
-      // Flujo ESTADO con foto
-      if (rawText.toUpperCase().startsWith("ESTADO:")) {
-        const textoEstado = rawText.replace(/ESTADO:/i, "").trim();
-        pedidos.push({ telefono: "ESTADO / PROMO", mensaje: textoEstado + (esFoto ? " (con foto)" : ""), fecha: new Date().toLocaleString("es-NI", {timeZone: 'America/Managua'}), tipo: "Promo" });
-        await enviarWhatsApp(from, `✅ Guardé tu promo:\n"${textoEstado}"\n📸 Foto: ${esFoto ? 'Sí' : 'No'}\n\n¿La envío solo a clientes de 24h? Escribe: ENVIAR PROMO`);
-        return;
-      }
-      if (/ENVIAR PROMO/i.test(rawText)) {
-        const ahora = Date.now();
-        const ventana = 24 * 60 * 60 * 1000;
-        const ultimos = [...ultimaInteraccion.entries()].filter(([tel,t])=> tel!==OWNER_NUMBER && (ahora-t)<ventana && !bloqueados.has(tel)).map(([tel])=>tel).slice(-15);
-        const ultimaPromo = pedidos.filter(p=>p.telefono==="ESTADO / PROMO").slice(-1)[0];
-        if(!ultimaPromo){ await enviarWhatsApp(from, "No hay promo. Manda ESTADO: primero"); return; }
-        if(ultimos.length===0){ await enviarWhatsApp(from, "⚠️ Nadie en ventana 24h, no se envía para evitar ban."); return; }
-        for(const cli of ultimos){
-          await enviarWhatsApp(cli, `☕️ *Gracias Café - Hoy*\n\n${ultimaPromo.mensaje}\n\nTe esperamos 5:30pm-9:40pm\n_Responde STOP para no recibir promos_`);
-        }
-        await enviarWhatsApp(from, `✅ Enviada a ${ultimos.length} clientes (24h).`);
-        return;
-      }
-
-      // Confirmación de encargo
-      const matchConfirma = rawText.match(/CONFIRMO\s+(\d{8,15})/i);
-      if (matchConfirma) {
-        const clienteDestino = matchConfirma[1];
-        const { getOwnerPrompt } = require('./owner');
-        respuesta = await getReply(getOwnerPrompt(rawText, historial));
-        await enviarWhatsApp(clienteDestino, respuesta);
-       
+    if (historial.length > 14) historial
