@@ -1,5 +1,5 @@
 {
-  "name": "gracias-cafe-final",
+  "name": "gracias-cafe-groq",
   "version": "4.0.0",
   "main": "app.js",
   "scripts": { "start": "node app.js" },
