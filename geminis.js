@@ -1,8 +1,27 @@
-const axios = require('axios');
-async function askGemini(prompt){
-  try{
-    const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, { contents:[{parts:[{text:prompt}]}] });
-    return res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  }catch(e){ console.log('GEMINI ERROR', e.response?.data||e.message); return null; }
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// Soporta GEMINIS_API_KEY o GEMINI_API_KEY
+const apiKey = process.env.GEMINIS_API_KEY || process.env.GEMINI_API_KEY || process.env.GEMINI_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+async function getGeminiReply(prompt) {
+  if (!genAI) {
+    console.log("Falta GEMINIS_API_KEY en Render");
+    return null;
+  }
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (e) {
+    console.log("Gemini error:", e.message);
+    return null;
+  }
 }
-module.exports = { askGemini };
+
+// Para compatibilidad con lo que busca app.js
+async function getReply(prompt) {
+  return getGeminiReply(prompt);
+}
+
+module.exports = { getGeminiReply, getReply };
