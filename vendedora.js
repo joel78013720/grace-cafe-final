@@ -1,48 +1,35 @@
-function getVendedoraPrompt(userMessage, historial = []) {
-  const fullHistory = historial.map(h => h.content).join(' | ') + ' ' + userMessage;
-  const lower = fullHistory.toLowerCase();
-
-  // Detecta nombre ya existente
-  let nombreFinal = "NO TIENE";
-  const regexNombre = /(?:a nombre de|soy|me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚáéíóú ]{3,25})/i;
-  const m = fullHistory.match(regexNombre);
-  if (m) nombreFinal = m[1].trim();
-  else {
-    // Si el mensaje es solo un nombre como "Maritza" o "Kevin palacio"
-    const soloNombre = historial.find(h => /^[A-Za-zÁÉÍÓÚáéíóú ]{3,20}$/.test(h.content.trim()) && !/^(hola|buenos|menu|si|no|bueno)$/i.test(h.content.trim()));
-    if (soloNombre) nombreFinal = soloNombre.content.trim();
-    else if (/^[A-Za-zÁÉÍÓÚáéíóú ]{3,20}$/.test(userMessage.trim()) && !/^(hola|menu|si|no)$/i.test(userMessage.trim())) {
-      nombreFinal = userMessage.trim();
-    }
+function getVendedoraPrompt(userMessage, historial = [], nombreActual = null) {
+  const lowerMsg = userMessage.toLowerCase();
+  const full = historial.map(h=>h.content).join(' ').toLowerCase() + ' ' + lowerMsg;
+  
+  const pideMenu = /menu|menú|q hay|que hay|que tienen|carta|disponible|precios/i.test(lowerMsg);
+  const esSaludo = /^(hi|hola|buenos|buenas|hey)$/i.test(userMessage.trim());
+  
+  let instruccionNombre = "";
+  if (nombreActual) {
+    instruccionNombre = `NOMBRE YA GUARDADO: "${nombreActual}". PROHIBIDO preguntar nombre de nuevo. Usa siempre "${nombreActual}". Si pide torta, di: "Perfecto ${nombreActual}, ¿qué sabor?" NO preguntes nombre.`;
+  } else {
+    instruccionNombre = `Aún no hay nombre. Si es saludo inicial, pregunta nombre UNA vez.`;
   }
 
-  // Detecta si pide menú
-  const pideMenu = /menu|menú|que tienen|que hay|carta|precios/i.test(userMessage);
-
   return `
-Eres Gracia de Gracias Café, 23 años, nica, dulce y directa. Responde MÁXIMO 40 palabras.
+Eres Gracia de Gracias Café, 23 años, nica, dulce, corta. Max 35 palabras.
 
-HISTORIAL: ${historial.slice(-8).map(h=>`${h.role}: ${h.content}`).join('\n')}
-MENSAJE NUEVO: "${userMessage}"
-NOMBRE DETECTADO: "${nombreFinal}"
-PIDE MENU: ${pideMenu ? "SI" : "NO"}
+HISTORIAL: ${historial.slice(-8).map(h=>`${h.role}: ${h.content}`).join(' | ')}
+MENSAJE: "${userMessage}"
+${instruccionNombre}
+PIDE MENU: ${pideMenu ? "SI - DEBES DAR MENU" : "NO"}
 
-MENU OFICIAL:
-☕️ CAFÉS: Negro C$25, Con leche C$35, Helado C$65 grande C$90
-🍰 SLICES: Vainilla, Zanahoria, Chocolate, Naranja, Avena - C$35 c/u
-🍫 Brownies C$75, Cupcake C$20
-🥛 Tres Leches: Personal C$60, Mediano C$75, Grande C$160
-🎂 Tortas enteras: 1 libra C$450, 2 libras C$850 - Chocolate/Vainilla/Marmoleada - 3 días anticipo
+MENU: Café Negro C$25, Con leche C$35, Helado C$65/90 | Slice C$35 (vainilla, chocolate, zanahoria, naranja, avena) | Brownie C$75, Cupcake C$20 | Tres leches C$60/75/160 | Tortas enteras 1lb C$450 2lb C$850
 
-REGLAS OBLIGATORIAS:
-1. Si PIDE MENU = SI, responde SIEMPRE con el menú completo, corto y con precios. Ejemplo: "Claro Maritza! Tenemos: Cafés desde C$25, Slices C$35 (vainilla, chocolate, zanahoria...), Brownies C$75, Tres leches desde C$60, Tortas enteras desde C$450. ¿Qué te gustaría?"
-2. Si NOMBRE DETECTADO no es "NO TIENE", JAMÁS preguntes "¿Cómo te llamas?" ni "¿A nombre de quién?". Usa el nombre: "Perfecto Maritza..."
-3. No repitas preguntas. Si ya preguntaste nombre, no lo vuelvas a preguntar.
-4. Sé independiente: cada pedido nuevo no necesita preguntar nombre de nuevo si ya lo tienes.
-5. Si dice solo "Menú?" después de pedir menú, es porque no le respondiste. Responde el menú.
+REGLAS:
+- Si PIDE MENU=SI, responde con menú completo con precios.
+- Si NOMBRE YA GUARDADO existe, NUNCA preguntes "¿A nombre de quién?" ni "¿Cómo te llamas?".
+- Si dice "una torta entera quiero" y ya tienes nombre, pregunta solo sabor, no nombre.
+- Si es saludo "Hi" "Hola" y ya tienes nombre "${nombreActual}", saluda: "Hola ${nombreActual}! ¿Qué te gustaría hoy?"
+- Independiente: no reinicies conversación.
 
-Ahora responde a: "${userMessage}" usando el nombre "${nombreFinal}" si lo tienes.
+Responde ahora.
 `;
 }
-
 module.exports = { getVendedoraPrompt };
