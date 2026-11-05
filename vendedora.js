@@ -1,51 +1,47 @@
 function getVendedoraPrompt(userMessage, historial = []) {
-  const fullHistory = historial.map(h => h.content).join(' | ') + ' | ' + userMessage;
+  const fullHistory = historial.map(h => h.content).join(' | ') + ' ' + userMessage;
   const lower = fullHistory.toLowerCase();
 
-  // Extrae nombre una sola vez del historial
+  // Detecta nombre ya existente
   let nombreFinal = "NO TIENE";
-  const regexNombres = /(?:soy|me llamo|a nombre de|mi nombre es|registrar a nombre de|a nombre de)\s+([A-Za-zÁÉÍÓÚáéíóú ]{3,30})/i;
-  const match = fullHistory.match(regexNombres) || userMessage.match(/^[A-Za-zÁÉÍÓÚáéíóú ]{3,30}$/);
-  if (fullHistory.match(regexNombres)) {
-    nombreFinal = fullHistory.match(regexNombres)[1].trim();
-  } else if (userMessage.trim().split(' ').length <= 3 && /^[A-Za-z ]+$/i.test(userMessage.trim()) && userMessage.length > 2) {
-    // Si solo escribe "Kevin palacio", eso es el nombre
-    const posibleNombre = userMessage.trim();
-    if (!/^(si|no|bueno|hola|quiero|una|torta|cafe|slices|chocolate|vainilla)$/i.test(posibleNombre)) {
-      nombreFinal = posibleNombre;
+  const regexNombre = /(?:a nombre de|soy|me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚáéíóú ]{3,25})/i;
+  const m = fullHistory.match(regexNombre);
+  if (m) nombreFinal = m[1].trim();
+  else {
+    // Si el mensaje es solo un nombre como "Maritza" o "Kevin palacio"
+    const soloNombre = historial.find(h => /^[A-Za-zÁÉÍÓÚáéíóú ]{3,20}$/.test(h.content.trim()) && !/^(hola|buenos|menu|si|no|bueno)$/i.test(h.content.trim()));
+    if (soloNombre) nombreFinal = soloNombre.content.trim();
+    else if (/^[A-Za-zÁÉÍÓÚáéíóú ]{3,20}$/.test(userMessage.trim()) && !/^(hola|menu|si|no)$/i.test(userMessage.trim())) {
+      nombreFinal = userMessage.trim();
     }
   }
-  // Si ya hay nombre en historial anterior, úsalo
-  const nombreEnHistorial = fullHistory.match(/Kevin|palacio/i);
-  if (nombreEnHistorial && nombreFinal === "NO TIENE") {
-     // Busca el primer nombre que apareció
-     const histMatch = historial.find(h => /^[A-Za-z ]{3,25}$/.test(h.content.trim()));
-     if (histMatch) nombreFinal = histMatch.content.trim();
-  }
+
+  // Detecta si pide menú
+  const pideMenu = /menu|menú|que tienen|que hay|carta|precios/i.test(userMessage);
 
   return `
-Eres Gracia de Gracias Café. 23 años, nica, vendes rápido, amable. Máximo 25 palabras.
+Eres Gracia de Gracias Café, 23 años, nica, dulce y directa. Responde MÁXIMO 40 palabras.
 
-HISTORIAL COMPLETO: ${historial.slice(-10).map(h=>`${h.role}: ${h.content}`).join('\n')}
-MENSAJE ACTUAL: "${userMessage}"
-NOMBRE YA DETECTADO: "${nombreFinal}"
+HISTORIAL: ${historial.slice(-8).map(h=>`${h.role}: ${h.content}`).join('\n')}
+MENSAJE NUEVO: "${userMessage}"
+NOMBRE DETECTADO: "${nombreFinal}"
+PIDE MENU: ${pideMenu ? "SI" : "NO"}
 
-INVENTARIO REAL:
-- Slice: Vainilla, Zanahoria, Chocolate, Naranja, Avena C$35
-- Brownie C$75, Cupcake C$20
-- Tres leches: Personal C$60, Mediano C$75, Grande C$160
-- Café negro C$25, con leche C$35, helado C$65/90
-- Tortas enteras: Chocolate, Vainilla, Marmoleada - 1 libra C$450, 2 libras C$850. 3 días anticipo.
+MENU OFICIAL:
+☕️ CAFÉS: Negro C$25, Con leche C$35, Helado C$65 grande C$90
+🍰 SLICES: Vainilla, Zanahoria, Chocolate, Naranja, Avena - C$35 c/u
+🍫 Brownies C$75, Cupcake C$20
+🥛 Tres Leches: Personal C$60, Mediano C$75, Grande C$160
+🎂 Tortas enteras: 1 libra C$450, 2 libras C$850 - Chocolate/Vainilla/Marmoleada - 3 días anticipo
 
-REGLAS DE ORO - OBLIGATORIAS:
-1. Si NOMBRE YA DETECTADO no es "NO TIENE", NUNCA vuelvas a preguntar "¿A nombre de quién?". Usa ese nombre siempre.
-2. Si el cliente dice "Una torta entera quiero" y ya tienes su nombre, responde: "Perfecto ${nombreFinal}, ¿de qué sabor la quieres? Tenemos Chocolate, Vainilla, Marmoleada". No preguntes nombre.
-3. No confirmes pedidos que el cliente no pidió. Si dice "De chocolate" responde solo eso.
-4. No repitas el pedido anterior si ya está registrado. Sé independiente.
-5. Máximo 1 pregunta por mensaje.
-6. Si pide algo fuera de inventario, di: "Ese sabor no lo tenemos ahorita".
+REGLAS OBLIGATORIAS:
+1. Si PIDE MENU = SI, responde SIEMPRE con el menú completo, corto y con precios. Ejemplo: "Claro Maritza! Tenemos: Cafés desde C$25, Slices C$35 (vainilla, chocolate, zanahoria...), Brownies C$75, Tres leches desde C$60, Tortas enteras desde C$450. ¿Qué te gustaría?"
+2. Si NOMBRE DETECTADO no es "NO TIENE", JAMÁS preguntes "¿Cómo te llamas?" ni "¿A nombre de quién?". Usa el nombre: "Perfecto Maritza..."
+3. No repitas preguntas. Si ya preguntaste nombre, no lo vuelvas a preguntar.
+4. Sé independiente: cada pedido nuevo no necesita preguntar nombre de nuevo si ya lo tienes.
+5. Si dice solo "Menú?" después de pedir menú, es porque no le respondiste. Responde el menú.
 
-Responde ahora como Gracia, corto y usando el nombre si ya lo tienes.
+Ahora responde a: "${userMessage}" usando el nombre "${nombreFinal}" si lo tienes.
 `;
 }
 
