@@ -10,8 +10,7 @@ const vistos = new Set();
 const ultimaInteraccion = new Map();
 const bloqueados = new Set();
 
-const OWNER_NUMBER = process.env.OWNER_NUMBER || "50585219636";
-const MI_NUMERO_PRUEBA = "50583872855";
+const OWNER_NUMBER = "50583872855";
 
 app.get('/webhook', (req, res) => {
   const token = req.query['hub.verify_token'];
@@ -105,8 +104,7 @@ app.post('/webhook', async (req, res) => {
 
     if (debeEnviarAlDueno) {
       const aviso = `${tipoPedido}\nCliente: ${nombreCliente} - wa.me/${from}\nTel: ${from}\n\nHISTORIAL:\n${historial.map(h=>`> ${h.content}`).join('\n')}\n\nBot: ${respuesta}`;
-      await enviarWhatsApp(MI_NUMERO_PRUEBA, aviso);
-      console.log("AVISO A PRUEBA 83872855 ENVIADO");
+      await enviarWhatsApp(OWNER_NUMBER, aviso);
     }
 
     historial.push({ role: "assistant", content: respuesta });
@@ -117,12 +115,12 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/dashboard', (req,res)=>{
-  let html = `<meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;padding:15px;background:#FFF8F0}.card{background:#fff;padding:12px;margin:8px 0;border-radius:12px}</style><h2>☕️ Panel Gracias Café - Prueba 83872855</h2>`;
+  let html = `<meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font-family:sans-serif;padding:15px;background:#FFF8F0}.card{background:#fff;padding:12px;margin:8px 0;border-radius:12px}</style><h2>☕️ Panel Gracias Café - Dueña 83872855</h2>`;
   pedidos.slice().reverse().slice(0,150).forEach(p=>{ html+=`<div class="card"><b>📱 ${p.telefono}</b> - 👤 ${p.nombre}<br><small>${p.fecha}</small><br>💬 ${p.mensaje}</div>`; });
   res.send(html);
 });
 
-app.get('/', (req,res)=>res.send('Activo V18 - Pruebas a 83872855'));
+app.get('/', (req,res)=>res.send('Activo - Dueña directa 83872855'));
 async function enviarWhatsApp(to, body) {
   const phoneId = process.env.WHATSAPP_PHONE_ID || process.env.PHONE_NUMBER_ID;
   if (!phoneId || !process.env.WHATSAPP_TOKEN) return;
@@ -130,4 +128,4 @@ async function enviarWhatsApp(to, body) {
     await axios.post(`https://graph.facebook.com/v20.0/${phoneId}/messages`, { messaging_product:"whatsapp", to, text:{body}}, { headers:{Authorization:`Bearer ${process.env.WHATSAPP_TOKEN}`}});
   } catch(err){ console.log("Error WA:", err.response?.data || err.message); }
 }
-app.listen(process.env.PORT || 10000, ()=>console.log("V18 listo - 83872855"));
+app.listen(process.env.PORT || 10000, ()=>console.log("Dueña directa 83872855 listo"));
