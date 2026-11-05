@@ -1,37 +1,40 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-
-const apiKey = process.env.GEMINI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const axios = require('axios');
 
 const MODELOS_A_PROBAR = [
-  "gemini-3.8-flash",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash-latest",
   "gemini-1.5-flash",
+  "gemini-1.5-flash-latest",
+  "gemini-2.0-flash",
   "gemini-flash-latest"
 ];
 
 async function getReply(prompt) {
-  if (!genAI) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     console.log("Falta GEMINI_API_KEY en Render");
     return null;
   }
 
   for (const modelo of MODELOS_A_PROBAR) {
     try {
-      console.log(`Probando modelo: ${modelo}`);
-      const model = genAI.getGenerativeModel({ model: modelo });
-      const result = await model.generateContent(prompt);
-      const texto = result.response.text();
-      console.log(`Funciono con: ${modelo}`);
-      return texto;
+      console.log(`Probando modelo directo: ${modelo}`);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`;
+      
+      const res = await axios.post(url, {
+        contents: [{ parts: [{ text: prompt }] }]
+      }, { timeout: 15000 });
+
+      const texto = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (texto) {
+        console.log(`Funciono con: ${modelo}`);
+        return texto;
+      }
     } catch (e) {
-      console.log(`Fallo ${modelo}: ${e.message.substring(0,100)}`);
+      const err = e.response?.data?.error?.message || e.message;
+      console.log(`Fallo ${modelo}: ${err.substring(0,120)}`);
     }
   }
-  
-  console.log("Ningun modelo funciono");
+
+  console.log("Ningun modelo funciono - revisa GEMINI_API_KEY");
   return null;
 }
 
