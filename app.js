@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const { MENU, routeMessage } = require('./menu');
-const { askGemini } = require('./geminis');
+const { askGeminis } = require('./geminis');
 const { saveOrder } = require('./sheets');
 const { createEvent } = require('./calendar');
 const { potenciarRespuesta } = require('./vendedora');
@@ -31,7 +31,7 @@ Cliente: "${text}"
 Hora Managua: ${new Date().toLocaleString('es-NI', {timeZone:'America/Managua'})}
 Responde breve (max 3 lineas), amable y cariñosa, como recepcionista. Si es fuera de menú o personalizado, di que lo pasaras al propietario.`;
 
-    let respuesta = await askGemini(prompt);
+    let respuesta = await askGeminis(prompt);
     if(!respuesta) respuesta = "Hola corazón 💛 Gracias por escribir a Gracias Café. Estamos Martes a Viernes 5:30pm a 9:40pm, solo para recoger o disfrutar aquí. ¿Qué te gustaría?";
 
     // Potenciador de ventas (brownie con café, empaque bonito)
