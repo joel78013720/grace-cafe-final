@@ -1,5 +1,5 @@
 const express = require('express');
-const { getReply } = require('./geminis');
+const { getReply } = require('./gemini');
 const { getOwnerPrompt } = require('./owner');
 const { getVendedoraPrompt } = require('./vendedora');
 const { getMenuText } = require('./menu');
