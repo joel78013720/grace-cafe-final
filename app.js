@@ -1,6 +1,5 @@
 const express = require('express');
 const { getReply } = require('./gemini');
-const { getOwnerPrompt } = require('./owner');
 const { getVendedoraPrompt } = require('./vendedora');
 const { getMenuText } = require('./menu');
 const axios = require('axios');
@@ -8,59 +7,67 @@ const axios = require('axios');
 const app = express();
 app.use(express.json());
 
+// VERIFICACION DE WEBHOOK - ESTO ES LO QUE TE FALTABA
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+    console.log('Webhook verificado');
+    return res.status(200).send(challenge);
+  }
+  res.sendStatus(403);
+});
+
 const mensajesVistos = new Set();
 
 app.post('/webhook', async (req, res) => {
+  res.sendStatus(200); // Responder rapido para que no se duerma
   try {
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    if (!message) return res.sendStatus(200);
+    if (!message) return;
 
-    if (mensajesVistos.has(message.id)) return res.sendStatus(200);
+    if (mensajesVistos.has(message.id)) return;
     mensajesVistos.add(message.id);
-    setTimeout(() => mensajesVistos.delete(message.id), 1000 * 60 * 10);
+    setTimeout(() => mensajesVistos.delete(message.id), 600000);
 
     const from = message.from;
-    const text = message.text?.body?.toLowerCase() || "";
     const rawText = message.text?.body || "";
+    const text = rawText.toLowerCase();
 
-    console.log(`Mensaje de ${from}: ${text}`);
+    console.log(`De ${from}: ${rawText}`);
 
     let respuesta;
-
     if (text.includes("disponib") || text.includes("menu") || text.includes("carta") || text.includes("tienen") || text.includes("tenes")) {
       respuesta = getMenuText();
     } else if (from === process.env.OWNER_NUMBER) {
-      const prompt = getOwnerPrompt(rawText);
-      respuesta = await getReply(prompt);
+      const { getOwnerPrompt } = require('./owner');
+      respuesta = await getReply(getOwnerPrompt(rawText)) || "Dime Rey, ¿qué hacemos?";
     } else {
-      const prompt = getVendedoraPrompt(rawText);
-      respuesta = await getReply(prompt);
+      const { getVendedoraPrompt } = require('./vendedora');
+      respuesta = await getReply(getVendedoraPrompt(rawText)) || getMenuText();
     }
 
     if (respuesta) await enviarWhatsApp(from, respuesta);
-    res.sendStatus(200);
   } catch (e) {
     console.log("Webhook error:", e.message);
-    res.sendStatus(200);
   }
 });
 
 async function enviarWhatsApp(to, body) {
   try {
     await axios.post(`https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
-      messaging_product: "whatsapp",
-      to: to,
-      text: { body: body }
+      messaging_product: "whatsapp", to, text: { body }
     }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }
     });
+    console.log(`Enviado a ${to}`);
   } catch (err) {
     console.log("WA Error:", err.response?.data || err.message);
   }
 }
 
-app.get('/', (req, res) => res.send('Bot Gracias Cafe Live'));
-app.listen(10000, () => console.log('Server en 10000'));
+app.get('/', (req, res) => res.send('Gracias Cafe Live'));
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`Server en ${PORT}`));
