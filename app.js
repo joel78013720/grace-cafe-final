@@ -38,7 +38,6 @@ app.post('/webhook', async (req, res) => {
     const from = msg.from;
     let text = msg.text?.body || '';
 
-    // --- LÓGICA DUEÑA (corta, sin decir reina al cliente) ---
     if (esDueña(from)) {
       if (text.toLowerCase().includes('subir estado') || text.toLowerCase().startsWith('estado:')) {
         const desc = text.replace(/subir estado:?|estado:/i, '').trim() || 'Promo Gracias Café';
@@ -59,15 +58,22 @@ app.post('/webhook', async (req, res) => {
 
     if (!text && msg.type !== 'image') return res.sendStatus(200);
 
-    // --- LA IA RESUELVE TODO ---
-    // Ya no listamos menú con bullets, ya no hay if cafe, if comer
-    // Todo lo resuelve gemini.js + prompt.js
     const action = routeMessage(text);
     let reply = await getReply(text, from);
 
     if (!reply) reply = 'Hola, ¿cómo le ayudo hoy?';
 
-    if (action.type === 'order') await saveOrder({ cliente: from, pedido: text });
-    if (action.type === 'calendar') await createEvent({ cliente: from, pedido: text });
+    if (action.type === 'order') await saveOrder({ cliente: from, pedido: text }).catch(()=>{});
+    if (action.type === 'calendar') await createEvent({ cliente: from, pedido: text }).catch(()=>{});
 
-    await sendWhatsApp(from
+    await sendWhatsApp(from, reply);
+    return res.sendStatus(200);
+
+  } catch (e) {
+    console.log('WEBHOOK ERROR:', e.response?.data || e.message);
+    return res.sendStatus(200);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log('Gracias Cafe BOT Gemini en puerto', PORT));
