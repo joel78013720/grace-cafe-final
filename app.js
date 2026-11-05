@@ -1,26 +1,36 @@
+const express = require('express');
+const bodyParser = require('body-parser');
 const { responderGraciasCafe, esPedidoGrande } = require('./graciasCafe');
 
-// Cuando entra mensaje de WhatsApp:
-async function handleMensaje(numero, mensajeTexto, historial) {
-  let memoria = await getMemoria(numero); // leelo de tu sheet o json
-  
-  let respuesta = await responderGraciasCafe(mensajeTexto, historial, memoria);
+const app = express();
+app.use(bodyParser.json());
+app.use(require('cors')());
 
-  // Si es torta grande, avisá al dueño
-  if (esPedidoGrande(mensajeTexto)) {
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT}/sendMessage`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_ID_DUEÑO,
-        text: `🔔 NUEVO ENCARGO GRACIAS CAFÉ\nDe: ${numero}\nNombre: ${memoria.nombre || 'sin nombre'}\nPide: ${mensajeTexto}\n\nResponder en Calendar: 3 días mínimo, 50% anticipo.`
-      })
-    });
-    respuesta += "\n\nYa le avisé al propietario, en cuanto me confirme el precio final yo le escribo.";
+// Memoria simple en RAM (después la pasamos a Google Sheet)
+let memorias = {};
+
+app.post('/webhook', async (req, res) => {
+  const numero = req.body.numero || req.body.from;
+  const mensaje = req.body.mensaje || req.body.text;
+  const historial = req.body.historial || [];
+
+  if(!memoria) memorias[numero] = { nombre: null, pedido: null };
+  
+  try {
+    let respuesta = await responderGraciasCafe(mensaje, historial, memorias[numero]);
+    
+    // Guarda nombre si lo dice
+    if(mensaje.toLowerCase().includes("mi nombre es")) {
+      memorias[numero].nombre = mensaje.split("es")[1].trim();
+    }
+
+    res.json({ respuesta: respuesta, esPedidoGrande: esPedidoGrande(mensaje) });
+  } catch(e) {
+    console.log(e);
+    res.json({ respuesta: "Mire, se me cayó un momentito la señal, ¿me repite porfa qué quería?" });
   }
+});
 
-  // Guarda memoria para que no pregunte de nuevo
-  await saveMemoria(numero, { nombre: memoria.nombre, ultimo_pedido: mensajeTexto });
-  
-  return respuesta;
-}
+app.get('/', (req, res) => res.send('Gracias Cafe BOT vivo con IA de Meta'));
+
+app.listen(10000, () => console.log('Bot corriendo'));
