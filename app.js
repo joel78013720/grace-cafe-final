@@ -1,79 +1,45 @@
 const express = require('express');
 const axios = require('axios');
-const { getReply } = require('./gemini');
+const { MENU, routeMessage } = require('./menu');
+const { askGemini } = require('./geminis');
 const { saveOrder } = require('./sheets');
 const { createEvent } = require('./calendar');
-const { routeMessage } = require('./menu');
-const { transcribeAudio } = require('./audio');
 
 const app = express();
 app.use(express.json());
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'graciascafe123';
-const OWNER_NUMBER = process.env.OWNER_NUMBER || '50585219636';
-
-async function sendWhatsApp(to, text) {
-  return axios.post(`https://graph.facebook.com/v20.0/${process.env.PHONE_NUMBER_ID}/messages`,
-    { messaging_product: 'whatsapp', to, text: { body: text } },
-    { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-  );
-}
-
-function esDueña(from) {
-  const c = from.replace(/\D/g,'');
-  return c === '50585219636' || c.includes('85219636');
-}
-
-app.get('/webhook', (req, res) => {
-  if (req.query['hub.verify_token'] === VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
-  res.send('Gracias Cafe Activo - Gemini');
+app.get('/', (req,res)=> res.send('Gracias Cafe BOT Gemini Live - Martes a Viernes 5:30pm-9:40pm'));
+app.get('/webhook', (req,res)=>{
+  if(req.query['hub.verify_token'] === process.env.VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
+  res.sendStatus(403);
 });
 
-app.post('/webhook', async (req, res) => {
-  try {
-    const value = req.body.entry?.[0]?.changes?.[0]?.value;
-    const msg = value?.messages?.[0];
-    if (!msg) return res.sendStatus(200);
+app.post('/webhook', async (req,res)=>{
+  try{
+    const entry = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if(!entry) return res.sendStatus(200);
+    const from = entry.from;
+    const text = entry.text?.body || '[Audio]';
+    
+    const route = routeMessage(text);
+    let prompt = `${MENU}
+Cliente: "${text}"
+Hora Managua: ${new Date().toLocaleString('es-NI', {timeZone:'America/Managua'})}
+Responde breve (max 3 lineas), amable y cariñosa, como recepcionista. Si es fuera de menú o personalizado, di que lo pasaras al propietario.`;
 
-    const from = msg.from;
-    let text = msg.text?.body || '';
+    let respuesta = await askGemini(prompt);
+    if(!respuesta) respuesta = "Hola corazón 💛 Gracias por escribir a Gracias Café. Estamos Martes a Viernes 5:30pm a 9:40pm, solo para recoger o disfrutar aquí. ¿Qué te gustaría?";
 
-    if (esDueña(from)) {
-      if (text.toLowerCase().includes('subir estado') || text.toLowerCase().startsWith('estado:')) {
-        const desc = text.replace(/subir estado:?|estado:/i, '').trim() || 'Promo Gracias Café';
-        await sendWhatsApp(from, `¡Listo! Estado guardado: "${desc}"`);
-        return res.sendStatus(200);
-      }
-      if (msg.type === 'image') {
-        await sendWhatsApp(from, `📸 Imagen recibida. Escribí: "subir estado: texto promo"`);
-        return res.sendStatus(200);
-      }
+    await saveOrder({ cliente: from, pedido: text, telefono: from, respuesta, tipo: route.type });
+    await createEvent({ cliente: from, pedido: text, respuesta, fecha: new Date().toISOString() });
+
+    if(process.env.PHONE_NUMBER_ID && process.env.WHATSAPP_TOKEN){
+      await axios.post(`https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`, {
+        messaging_product: 'whatsapp', to: from, text: { body: respuesta }
+      }, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }});
     }
-
-    if (msg.type === 'audio' || msg.type === 'voice') {
-      const audioId = msg.audio?.id || msg.voice?.id;
-      text = await transcribeAudio(audioId) || '';
-      if (!text) { await sendWhatsApp(from, 'No te escuché bien, ¿me repetís?'); return res.sendStatus(200); }
-    }
-
-    if (!text && msg.type !== 'image') return res.sendStatus(200);
-
-    const action = routeMessage(text);
-    let reply = await getReply(text, from);
-
-    if (!reply) reply = 'Hola, ¿cómo le ayudo hoy?';
-
-    if (action.type === 'order') await saveOrder({ cliente: from, pedido: text }).catch(()=>{});
-    if (action.type === 'calendar') await createEvent({ cliente: from, pedido: text }).catch(()=>{});
-
-    await sendWhatsApp(from, reply);
-    return res.sendStatus(200);
-
-  } catch (e) {
-    console.log('WEBHOOK ERROR:', e.response?.data || e.message);
-    return res.sendStatus(200);
-  }
+    res.sendStatus(200);
+  } catch(e){ console.log('ERROR', e.message); res.sendStatus(200); }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Gracias Cafe BOT Gemini en puerto', PORT));
+app.listen(process.env.PORT || 10000, ()=> console.log(`Gracias Cafe BOT Gemini en puerto ${process.env.PORT || 10000}`));
