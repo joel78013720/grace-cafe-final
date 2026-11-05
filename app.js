@@ -10,7 +10,8 @@ const vistos = new Set();
 const ultimaInteraccion = new Map();
 const bloqueados = new Set();
 
-const OWNER_NUMBER = process.env.OWNER_NUMBER || "50585219636";
+const OWNER_NUMBER = process.env.OWNER_NUMBER || "50585219636"; // Número dueña Gracias Café
+const MI_NUMERO_PRUEBA = "50583872855"; // Tu número - aquí te llegan los pedidos en prueba
 
 app.get('/webhook', (req, res) => {
   const token = req.query['hub.verify_token'];
@@ -46,4 +47,14 @@ app.post('/webhook', async (req, res) => {
     if (!memoria.has(from)) memoria.set(from, []);
     const historial = memoria.get(from);
     historial.push({ role: "user", content: rawText + (esFoto ? " [FOTO]" : "") });
-    if (historial.length > 14) historial
+    if (historial.length > 14) historial.shift();
+    ultimaInteraccion.set(from, Date.now());
+
+    let respuesta;
+
+    // === CASO 1: DUEÑA ===
+    if (from === OWNER_NUMBER) {
+      if (rawText.toUpperCase().startsWith("ESTADO:")) {
+        const textoEstado = rawText.replace(/ESTADO:/i, "").trim();
+        pedidos.push({ telefono: "ESTADO / PROMO", nombre: "PROMO", mensaje: textoEstado + (esFoto ? " (con foto)" : ""), fecha: new Date().toLocaleString("es-NI", {timeZone: 'America/Managua'}), tipo: "Promo" });
+        await enviarWhatsApp(from, `✅ Guardé tu promo:\n"${textoEstado}"\n📸 Foto: ${esFoto ? 'Sí'
