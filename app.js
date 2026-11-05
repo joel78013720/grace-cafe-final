@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require('axios');
-const { getReply } = require('./groq');
+const { getReply } = require('./gemini');
 const { saveOrder } = require('./sheets');
 const { createEvent } = require('./calendar');
 const { routeMessage } = require('./menu');
@@ -26,7 +26,7 @@ function esDueña(from) {
 
 app.get('/webhook', (req, res) => {
   if (req.query['hub.verify_token'] === VERIFY_TOKEN) return res.send(req.query['hub.challenge']);
-  res.send('Gracias Cafe Activo');
+  res.send('Gracias Cafe Activo - Gemini');
 });
 
 app.post('/webhook', async (req, res) => {
@@ -38,14 +38,15 @@ app.post('/webhook', async (req, res) => {
     const from = msg.from;
     let text = msg.text?.body || '';
 
+    // --- LÓGICA DUEÑA (corta, sin decir reina al cliente) ---
     if (esDueña(from)) {
       if (text.toLowerCase().includes('subir estado') || text.toLowerCase().startsWith('estado:')) {
         const desc = text.replace(/subir estado:?|estado:/i, '').trim() || 'Promo Gracias Café';
-        await sendWhatsApp(from, `¡Listo reina! 👑 Estado guardado: "${desc}" 📸`);
+        await sendWhatsApp(from, `¡Listo! Estado guardado: "${desc}"`);
         return res.sendStatus(200);
       }
       if (msg.type === 'image') {
-        await sendWhatsApp(from, `📸 Imagen recibida reina. Escribí: "subir estado: texto promo"`);
+        await sendWhatsApp(from, `📸 Imagen recibida. Escribí: "subir estado: texto promo"`);
         return res.sendStatus(200);
       }
     }
@@ -53,28 +54,20 @@ app.post('/webhook', async (req, res) => {
     if (msg.type === 'audio' || msg.type === 'voice') {
       const audioId = msg.audio?.id || msg.voice?.id;
       text = await transcribeAudio(audioId) || '';
-      if (!text) { await sendWhatsApp(from, '🎙️ No te escuché bien rey'); return res.sendStatus(200); }
+      if (!text) { await sendWhatsApp(from, 'No te escuché bien, ¿me repetís?'); return res.sendStatus(200); }
     }
 
     if (!text && msg.type !== 'image') return res.sendStatus(200);
 
+    // --- LA IA RESUELVE TODO ---
+    // Ya no listamos menú con bullets, ya no hay if cafe, if comer
+    // Todo lo resuelve gemini.js + prompt.js
     const action = routeMessage(text);
     let reply = await getReply(text, from);
 
+    if (!reply) reply = 'Hola, ¿cómo le ayudo hoy?';
+
     if (action.type === 'order') await saveOrder({ cliente: from, pedido: text });
     if (action.type === 'calendar') await createEvent({ cliente: from, pedido: text });
-    if (!reply) reply = 'Soy Gracias ☕️ ¿qué te antoja hoy?';
 
-    await sendWhatsApp(from, reply);
-
-    if (action.type === 'order' || action.type === 'calendar' || text.toLowerCase().includes('agenda')) {
-      const aviso = `🔔 NUEVO PEDIDO Gracias Café 👑\nCliente: ${from}\nDice: "${text}"\nIA: "${reply}"`;
-      try { await sendWhatsApp(OWNER_NUMBER, aviso); } catch(e){}
-    }
-
-    res.sendStatus(200);
-  } catch (e) { console.log(e.response?.data || e.message); res.sendStatus(200); }
-});
-
-app.get('/', (req, res) => res.send('Gracias Cafe Live - Dueña 85219636 OK'));
-app.listen(process.env.PORT || 10000, () => console.log('Live Dueña OK'));
+    await sendWhatsApp(from
